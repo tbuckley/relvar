@@ -135,3 +135,64 @@ describe("extend", function() {
 		r.rows[1].should.have.property("qux", "Just some number...");
 	});
 });
+
+describe("union", function() {
+	var baseA, baseB, r, valsA, valsB;
+	beforeEach("create test objects", function() {
+		baseA = new relvar.Relvar({
+			foo: Number,
+			bar: String,
+			baz: Boolean,
+		});
+		baseB = new relvar.Relvar({
+			foo: Number,
+			bar: String,
+			baz: Boolean,
+		});
+		valsA = [
+			{foo: 42, bar: "Hello, world!", baz: true},
+			{foo: 25, bar: "A good age", baz: false},
+		];
+		valsB = [
+			{foo: 1, bar: "A", baz: true},
+			{foo: 2, bar: "B", baz: false},
+			{foo: 3, bar: "C", baz: true},
+		];
+	});
+	it("should return a Relvar", function() {
+		r = relvar.union(baseA, baseB);
+		r.should.be.an.instanceof(relvar.Relvar, "Return is not a Relvar");
+		r.spec.should.have.property("foo", Number);
+		r.spec.should.have.property("bar", String);
+		r.spec.should.have.property("baz", Boolean);
+	});
+	it("should start with the combined rows of its bases", function() {
+		baseA.insert.apply(baseA, valsA);
+		baseB.insert.apply(baseB, valsB);
+		r = relvar.union(baseA, baseB);
+		r.rows.should.have.length(valsA.length + valsB.length);
+	});
+	it("should add a row when its base adds a row", function(done) {
+		this.timeout(100);
+		r = relvar.extend(base, valProps);
+		r.on("insert", function(rows) {
+			rows.should.have.length(vals.length);
+			rows[0].should.have.property("foo");
+			rows[0].should.have.property("qux");
+			done();
+		});
+		base.insert.apply(base, vals);
+	});
+	it("should handle value properties", function() {
+		base.insert.apply(base, vals);
+		r = relvar.extend(base, valProps);
+		r.rows[0].should.have.property("qux", "Goodbye!");
+		r.rows[1].should.have.property("qux", "Goodbye!");
+	});
+	it("should handle function properties", function() {
+		base.insert.apply(base, vals);
+		r = relvar.extend(base, funcProps);
+		r.rows[0].should.have.property("qux", "The meaning of life, the universe, and everything");
+		r.rows[1].should.have.property("qux", "Just some number...");
+	});
+});
