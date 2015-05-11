@@ -83,9 +83,7 @@ describe("Relvar", function() {
 			r.insert([val, val2]);
 		});
 	});
-});
 
-describe("Relvar", function() {
 	describe("#remove()", function() {
 		var r, vals, val, val2, invalidVal;
 
@@ -150,11 +148,6 @@ describe("Relvar", function() {
 				done();
 			});
 		});
-		it("should throw an Error for invalid values", function() {
-			(function() {
-				r.insert(invalidVal);
-			}).should.throw(Error);
-		});
 		it("should return the relvar for valid values", function() {
 			r.remove([val]).should.equal(r);
 		});
@@ -168,11 +161,109 @@ describe("Relvar", function() {
 			});
 			r.remove([val, val2]);
 		});
+		it("should work with only keys", function(done) {
+			this.timeout(100);
+			r.on("remove", function(rows) {
+				rows.should.be.an.Array;
+				rows.should.have.length(1, "Incorrect number of rows");
+				rows.should.containDeep([val]);
+				done();
+			});
+			r.remove([{foo: 42}]);
+		});
+	});
+
+	describe("#update()", function() {
+		var r, vals, origVal, newVal;
+
+		beforeEach("create table and value", function(done) {
+			r = new relvar.Relvar({
+				foo: Number,
+				bar: String,
+				baz: Boolean,
+			}, ["foo"]);
+			vals = [
+				{foo: 1, bar: "A", baz: true},
+				{foo: 2, bar: "B", baz: false},
+				{foo: 3, bar: "C", baz: true},
+			];
+			origVal = {
+				foo: 42,
+				bar: "hello world!",
+				baz: true,
+			};
+			newVal = {
+				foo: 6*9,
+				bar: "twas brillig",
+				baz: false,
+			};
+			r.insert(vals.concat([origVal]), done);
+		});
+		it("should trigger an `update` event for existing rows", function(done) {
+			this.timeout(100);
+			r.on("update", function(keys, rows) {
+				keys.should.be.an.Array;
+				keys.should.have.length(1, "Incorrect number of rows");
+				keys.should.containDeep([origVal]);
+				rows.should.be.an.Array;
+				rows.should.have.length(1, "Incorrect number of rows");
+				rows.should.containDeep([newVal]);
+				done();
+			});
+			r.update([origVal], [newVal]);
+		});
+		it("should trigger an `insert` event asynchronously", function(done) {
+			this.timeout(100);
+			r.update([origVal], [newVal]);
+			r.on("update", function(keys, rows) {
+				keys.should.be.an.Array;
+				keys.should.have.length(1, "Incorrect number of rows");
+				keys.should.containDeep([origVal]);
+				rows.should.be.an.Array;
+				rows.should.have.length(1, "Incorrect number of rows");
+				rows.should.containDeep([newVal]);
+				done();
+			});
+		});
+		it("should call a callback when done", function(done) {
+			this.timeout(100);
+			r.update([origVal], [newVal], function() {
+				done();
+			});
+		});
+		it("should update the values in the relvar when done", function(done) {
+			this.timeout(100);
+			r.update([origVal], [newVal], function() {
+				rows = r.array();
+				rows.should.have.length(vals.length+1, "Incorrect number of rows");
+				rows.should.containDeep(vals);
+				rows.should.containDeep([newVal]);
+				rows.should.not.containDeep([origVal]);
+				done();
+			});
+		});
+		it("should return the relvar for valid values", function() {
+			r.update([origVal], [newVal]).should.equal(r);
+		});
+		it("should handle multiple values", function(done) {
+			this.timeout(100);
+			var newVals0 = {foo: 1234, bar: "password", baz: false};
+			r.on("update", function(keys, rows) {
+				keys.should.be.an.Array;
+				keys.should.have.length(2, "Incorrect number of keys");
+				keys.should.containDeep([vals[0], origVal]);
+				rows.should.be.an.Array;
+				rows.should.have.length(2, "Incorrect number of rows");
+				rows.should.containDeep([newVal, newVals0]);
+				done();
+			});
+			r.update([vals[0], origVal], [newVals0, newVal]);
+		});
 	});
 });
 
 describe("extend", function() {
-	var base, r, vals, valProps, funcProps;
+	var base, r, vals, newVals, valProps, funcProps;
 	beforeEach("create test objects", function() {
 		base = new relvar.Relvar({
 			foo: Number,
@@ -182,6 +273,10 @@ describe("extend", function() {
 		vals = [
 			{foo: 42, bar: "Hello, world!", baz: true},
 			{foo: 25, bar: "A good age", baz: false},
+		];
+		newVals = [
+			{foo: 43, bar: "Hello, world!", baz: true},
+			{foo: 26, bar: "A good age", baz: false},
 		];
 		valProps = {
 			qux: {
@@ -211,10 +306,9 @@ describe("extend", function() {
 	});
 	it("should start with any rows of its base", function(done) {
 		this.timeout(100);
-		base.insert.apply(base, vals);
-		process.nextTick(function() {
+		base.insert(vals, function() {
 			r = relvar.extend(base, valProps);
-			r.rows.should.have.length(vals.length);
+			r.array().should.have.length(vals.length);
 			done();
 		});
 	});
@@ -223,30 +317,74 @@ describe("extend", function() {
 		r = relvar.extend(base, valProps);
 		r.on("insert", function(rows) {
 			rows.should.have.length(vals.length);
-			rows[0].should.have.property("foo");
-			rows[0].should.have.property("qux");
+			rows.forEach(function(row) {
+				row.should.have.property("foo");
+				row.should.have.property("bar");
+				row.should.have.property("baz");
+				row.should.have.property("qux");
+			});
 			done();
 		});
-		base.insert.apply(base, vals);
+		base.insert(vals);
+	});
+	it("should remove a row when its base removes a row", function(done) {
+		this.timeout(100);
+		r = relvar.extend(base, valProps);
+		base.insert(vals, function() {
+			base.remove(vals);
+		});
+		r.on("remove", function(rows) {
+			rows.should.have.length(vals.length);
+			rows.forEach(function(row) {
+				row.should.have.property("foo");
+				row.should.have.property("bar");
+				row.should.have.property("baz");
+				row.should.have.property("qux");
+			});
+			done();
+		});
+	});
+	it("should update a row when its base updates a row", function(done) {
+		this.timeout(100);
+		r = relvar.extend(base, valProps);
+		base.insert(vals, function() {
+			base.update(vals, newVals);
+		});
+		r.on("update", function(rows) {
+			rows.should.have.length(newVals.length);
+			rows.forEach(function(row) {
+				row.should.have.property("foo");
+				row.should.have.property("bar");
+				row.should.have.property("baz");
+				row.should.have.property("qux");
+			});
+			done();
+		});
 	});
 	it("should handle value properties", function(done) {
 		this.timeout(100);
-		base.insert.apply(base, vals);
+		base.insert(vals);
 		r = relvar.extend(base, valProps);
 		r.on("insert", function(rows) {
-			r.rows.should.have.length(vals.length);
-			r.rows[0].should.have.property("qux", "Goodbye!");
-			r.rows[1].should.have.property("qux", "Goodbye!");
+			r.array().should.have.length(vals.length);
+			r.array().forEach(function(row) {
+				row.should.have.property("qux", "Goodbye!");
+			});
 			done();
 		});
 	});
 	it("should handle function properties", function() {
-		base.insert.apply(base, vals);
+		base.insert(vals);
 		r = relvar.extend(base, funcProps);
 		r.on("insert", function(rows) {
-			r.rows.should.have.length(vals.length);
-			r.rows[0].should.have.property("qux", "The meaning of life, the universe, and everything");
-			r.rows[1].should.have.property("qux", "Just some number...");
+			r.array().should.have.length(vals.length);
+			r.array().forEach(function(row) {
+				if(row.foo === 42) {
+					row.should.have.property("qux", "The meaning of life, the universe, and everything");
+				} else {
+					row.should.have.property("qux", "Just some number...");
+				}
+			});
 		});
 	});
 });
@@ -275,11 +413,10 @@ describe("project", function() {
 	});
 	it("should start with any rows of its base", function(done) {
 		this.timeout(100);
-		base.insert.apply(base, vals);
-		process.nextTick(function() {
-			r = relvar.project(base, props, uniqueKey);
-			r.rows.should.have.length(vals.length);
-			r.rows.forEach(function(row) {
+		base.insert(vals, function() {
+			r = relvar.project(base, props);
+			r.array().should.have.length(vals.length);
+			r.array().forEach(function(row) {
 				row.should.have.property("foo");
 				row.should.not.have.property("bar");
 				row.should.have.property("baz");
@@ -299,7 +436,7 @@ describe("project", function() {
 			});
 			done();
 		});
-		base.insert.apply(base, vals);
+		base.insert(vals);
 	});
 });
 
@@ -334,34 +471,34 @@ describe("union", function() {
 		r.spec.should.have.property("baz", Boolean);
 	});
 	it("should start with the combined rows of its bases", function(done) {
-		baseA.insert.apply(baseA, valsA);
-		baseB.insert.apply(baseB, valsB);
-		process.nextTick(function() {
-			r = relvar.union(baseA, baseB);
-			r.rows.should.have.length(valsA.length + valsB.length);
-			done();
+		baseA.insert(valsA, function() {
+			baseB.insert(valsB, function() {
+				r = relvar.union(baseA, baseB);
+				r.array().should.have.length(valsA.length + valsB.length);
+				done();
+			});
 		});
 	});
 	it("should add a row when its first base adds a row", function(done) {
 		this.timeout(100);
-		baseB.insert.apply(baseB, valsB.concat([function() {
+		baseB.insert(valsB, function() {
 			r = relvar.union(baseA, baseB);
 			r.on("insert", function(rows) {
 				rows.should.have.length(valsA.length);
 				done();
 			});
-			baseA.insert.apply(baseA, valsA);
-		}]));
+			baseA.insert(valsA);
+		});
 	});
-	it("should add a row when its second base adds a row", function(done) {
+	it("should add a row when its first base adds a row", function(done) {
 		this.timeout(100);
-		baseA.insert.apply(baseA, valsA.concat([function() {
+		baseB.insert(valsA, function() {
 			r = relvar.union(baseA, baseB);
 			r.on("insert", function(rows) {
 				rows.should.have.length(valsB.length);
 				done();
 			});
-			baseB.insert.apply(baseB, valsB);
-		}]));
+			baseA.insert(valsB);
+		});
 	});
 });
