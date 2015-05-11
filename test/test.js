@@ -12,7 +12,7 @@ describe("Relvar", function() {
 				foo: Number,
 				bar: String,
 				baz: Boolean,
-			});
+			}, ["foo"]);
 			val = {
 				foo: 42,
 				bar: "hello world!",
@@ -77,7 +77,7 @@ describe("extend", function() {
 			foo: Number,
 			bar: String,
 			baz: Boolean,
-		});
+		}, ["foo"]);
 		vals = [
 			{foo: 42, bar: "Hello, world!", baz: true},
 			{foo: 25, bar: "A good age", baz: false},
@@ -100,16 +100,22 @@ describe("extend", function() {
 			},
 		};
 	});
-	it("should return a Relvar", function() {
+	it("should return a Relvar with the extended spec", function() {
 		r = relvar.extend(base, valProps);
 		r.should.be.an.instanceof(relvar.Relvar, "Return is not a Relvar");
 		r.spec.should.have.property("foo", Number);
+		r.spec.should.have.property("bar", String);
+		r.spec.should.have.property("baz", Boolean);
 		r.spec.should.have.property("qux", String);
 	});
-	it("should start with any rows of its base", function() {
+	it("should start with any rows of its base", function(done) {
+		this.timeout(100);
 		base.insert.apply(base, vals);
-		r = relvar.extend(base, valProps);
-		r.rows.should.have.length(vals.length);
+		process.nextTick(function() {
+			r = relvar.extend(base, valProps);
+			r.rows.should.have.length(vals.length);
+			done();
+		});
 	});
 	it("should add a row when its base adds a row", function(done) {
 		this.timeout(100);
@@ -122,17 +128,77 @@ describe("extend", function() {
 		});
 		base.insert.apply(base, vals);
 	});
-	it("should handle value properties", function() {
+	it("should handle value properties", function(done) {
+		this.timeout(100);
 		base.insert.apply(base, vals);
 		r = relvar.extend(base, valProps);
-		r.rows[0].should.have.property("qux", "Goodbye!");
-		r.rows[1].should.have.property("qux", "Goodbye!");
+		r.on("insert", function(rows) {
+			r.rows.should.have.length(vals.length);
+			r.rows[0].should.have.property("qux", "Goodbye!");
+			r.rows[1].should.have.property("qux", "Goodbye!");
+			done();
+		});
 	});
 	it("should handle function properties", function() {
 		base.insert.apply(base, vals);
 		r = relvar.extend(base, funcProps);
-		r.rows[0].should.have.property("qux", "The meaning of life, the universe, and everything");
-		r.rows[1].should.have.property("qux", "Just some number...");
+		r.on("insert", function(rows) {
+			r.rows.should.have.length(vals.length);
+			r.rows[0].should.have.property("qux", "The meaning of life, the universe, and everything");
+			r.rows[1].should.have.property("qux", "Just some number...");
+		});
+	});
+});
+
+describe("project", function() {
+	var base, r, vals, props, uniqueKey;
+	beforeEach("create test objects", function() {
+		base = new relvar.Relvar({
+			foo: Number,
+			bar: String,
+			baz: Boolean,
+		}, ["foo"]);
+		uniqueKey = ["foo"];
+		vals = [
+			{foo: 42, bar: "Hello, world!", baz: true},
+			{foo: 25, bar: "A good age", baz: false},
+		];
+		props = ["foo", "baz"];
+	});
+	it("should return a Relvar with the projected spec", function() {
+		r = relvar.project(base, props, uniqueKey);
+		r.should.be.an.instanceof(relvar.Relvar, "Return is not a Relvar");
+		r.spec.should.have.property("foo", Number);
+		r.spec.should.have.property("baz", Boolean);
+		r.spec.should.not.have.property("bar");
+	});
+	it("should start with any rows of its base", function(done) {
+		this.timeout(100);
+		base.insert.apply(base, vals);
+		process.nextTick(function() {
+			r = relvar.project(base, props, uniqueKey);
+			r.rows.should.have.length(vals.length);
+			r.rows.forEach(function(row) {
+				row.should.have.property("foo");
+				row.should.not.have.property("bar");
+				row.should.have.property("baz");
+			});
+			done();
+		});
+	});
+	it("should add a row when its base adds a row", function(done) {
+		this.timeout(100);
+		r = relvar.project(base, props, uniqueKey);
+		r.on("insert", function(rows) {
+			rows.should.have.length(vals.length);
+			rows.forEach(function(row) {
+				row.should.have.property("foo");
+				row.should.not.have.property("bar");
+				row.should.have.property("baz");
+			});
+			done();
+		});
+		base.insert.apply(base, vals);
 	});
 });
 
@@ -143,12 +209,12 @@ describe("union", function() {
 			foo: Number,
 			bar: String,
 			baz: Boolean,
-		});
+		}, ["foo"]);
 		baseB = new relvar.Relvar({
 			foo: Number,
 			bar: String,
 			baz: Boolean,
-		});
+		}, ["foo"]);
 		valsA = [
 			{foo: 42, bar: "Hello, world!", baz: true},
 			{foo: 25, bar: "A good age", baz: false},
@@ -159,40 +225,42 @@ describe("union", function() {
 			{foo: 3, bar: "C", baz: true},
 		];
 	});
-	it("should return a Relvar", function() {
+	it("should return a Relvar with the same spec", function() {
 		r = relvar.union(baseA, baseB);
 		r.should.be.an.instanceof(relvar.Relvar, "Return is not a Relvar");
 		r.spec.should.have.property("foo", Number);
 		r.spec.should.have.property("bar", String);
 		r.spec.should.have.property("baz", Boolean);
 	});
-	it("should start with the combined rows of its bases", function() {
+	it("should start with the combined rows of its bases", function(done) {
 		baseA.insert.apply(baseA, valsA);
 		baseB.insert.apply(baseB, valsB);
-		r = relvar.union(baseA, baseB);
-		r.rows.should.have.length(valsA.length + valsB.length);
-	});
-	it("should add a row when its base adds a row", function(done) {
-		this.timeout(100);
-		r = relvar.extend(base, valProps);
-		r.on("insert", function(rows) {
-			rows.should.have.length(vals.length);
-			rows[0].should.have.property("foo");
-			rows[0].should.have.property("qux");
+		process.nextTick(function() {
+			r = relvar.union(baseA, baseB);
+			r.rows.should.have.length(valsA.length + valsB.length);
 			done();
 		});
-		base.insert.apply(base, vals);
 	});
-	it("should handle value properties", function() {
-		base.insert.apply(base, vals);
-		r = relvar.extend(base, valProps);
-		r.rows[0].should.have.property("qux", "Goodbye!");
-		r.rows[1].should.have.property("qux", "Goodbye!");
+	it("should add a row when its first base adds a row", function(done) {
+		this.timeout(100);
+		baseB.insert.apply(baseB, valsB.concat([function() {
+			r = relvar.union(baseA, baseB);
+			r.on("insert", function(rows) {
+				rows.should.have.length(valsA.length);
+				done();
+			});
+			baseA.insert.apply(baseA, valsA);
+		}]));
 	});
-	it("should handle function properties", function() {
-		base.insert.apply(base, vals);
-		r = relvar.extend(base, funcProps);
-		r.rows[0].should.have.property("qux", "The meaning of life, the universe, and everything");
-		r.rows[1].should.have.property("qux", "Just some number...");
+	it("should add a row when its second base adds a row", function(done) {
+		this.timeout(100);
+		baseA.insert.apply(baseA, valsA.concat([function() {
+			r = relvar.union(baseA, baseB);
+			r.on("insert", function(rows) {
+				rows.should.have.length(valsB.length);
+				done();
+			});
+			baseB.insert.apply(baseB, valsB);
+		}]));
 	});
 });
