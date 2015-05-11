@@ -1,4 +1,4 @@
-var relvar = require("../lib/relvar");
+var relvar = require("../");
 var should = require("should-promised");
 
 // var prev = should.extend('must', Object.prototype);
@@ -37,13 +37,28 @@ describe("Relvar", function() {
 				rows.should.containDeep([val]);
 				done();
 			});
-			r.insert(val);
+			r.insert([val]);
 		});
-		it("should trigger an `insert` event in the nextTick", function(done) {
+		it("should trigger an `insert` event asynchronously", function(done) {
 			this.timeout(100);
-			r.insert(val);
+			r.insert([val]);
 			r.on("insert", function(rows) {
 				rows.should.be.an.Array;
+				rows.should.have.length(1, "Incorrect number of rows");
+				rows.should.containDeep([val]);
+				done();
+			});
+		});
+		it("should call a callback when done", function(done) {
+			this.timeout(100);
+			r.insert([val], function() {
+				done();
+			});
+		});
+		it("should update the values in the relvar when done", function(done) {
+			this.timeout(100);
+			r.insert([val], function() {
+				rows = r.array();
 				rows.should.have.length(1, "Incorrect number of rows");
 				rows.should.containDeep([val]);
 				done();
@@ -55,7 +70,7 @@ describe("Relvar", function() {
 			}).should.throw(Error);
 		});
 		it("should return the relvar for valid values", function() {
-			r.insert(val).should.equal(r);
+			r.insert([val]).should.equal(r);
 		});
 		it("should handle multiple values", function(done) {
 			this.timeout(100);
@@ -65,7 +80,93 @@ describe("Relvar", function() {
 				rows.should.containDeep([val, val2]);
 				done();
 			});
-			r.insert(val, val2);
+			r.insert([val, val2]);
+		});
+	});
+});
+
+describe("Relvar", function() {
+	describe("#remove()", function() {
+		var r, vals, val, val2, invalidVal;
+
+		beforeEach("create table and value", function(done) {
+			r = new relvar.Relvar({
+				foo: Number,
+				bar: String,
+				baz: Boolean,
+			}, ["foo"]);
+			vals = [
+				{foo: 1, bar: "A", baz: true},
+				{foo: 2, bar: "B", baz: false},
+				{foo: 3, bar: "C", baz: true},
+			];
+			val = {
+				foo: 42,
+				bar: "hello world!",
+				baz: true,
+			};
+			val2 = {
+				foo: 6*9,
+				bar: "twas brillig",
+				baz: false,
+			};
+			r.insert(vals, function() {
+				r.insert([val, val2], done);
+			});
+		});
+		it("should trigger an `remove` event for existing rows", function(done) {
+			this.timeout(100);
+			r.on("remove", function(rows) {
+				rows.should.be.an.Array;
+				rows.should.have.length(1, "Incorrect number of rows");
+				rows.should.containDeep([val]);
+				done();
+			});
+			r.remove([val]);
+		});
+		it("should trigger an `insert` event asynchronously", function(done) {
+			this.timeout(100);
+			r.remove([val]);
+			r.on("remove", function(rows) {
+				rows.should.be.an.Array;
+				rows.should.have.length(1, "Incorrect number of rows");
+				rows.should.containDeep([val]);
+				done();
+			});
+		});
+		it("should call a callback when done", function(done) {
+			this.timeout(100);
+			r.remove([val], function() {
+				done();
+			});
+		});
+		it("should update the values in the relvar when done", function(done) {
+			this.timeout(100);
+			r.remove([val], function() {
+				rows = r.array();
+				rows.should.have.length(vals.length+1, "Incorrect number of rows");
+				rows.should.containDeep(vals);
+				rows.should.containDeep([val2]);
+				done();
+			});
+		});
+		it("should throw an Error for invalid values", function() {
+			(function() {
+				r.insert(invalidVal);
+			}).should.throw(Error);
+		});
+		it("should return the relvar for valid values", function() {
+			r.remove([val]).should.equal(r);
+		});
+		it("should handle multiple values", function(done) {
+			this.timeout(100);
+			r.on("remove", function(rows) {
+				rows.should.be.an.Array;
+				rows.should.have.length(2, "Incorrect number of rows");
+				rows.should.containDeep([val, val2]);
+				done();
+			});
+			r.remove([val, val2]);
 		});
 	});
 });
