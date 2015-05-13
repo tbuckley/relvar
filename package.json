@@ -1,0 +1,30 @@
+{
+  "name": "relvar",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "bintrees": "^1.0.0",
+    "blanket": "^1.1.7",
+    "mocha": "^2.2.4",
+    "should": "^6.0.1",
+    "sinon": "^1.14.1"
+  },
+  "devDependencies": {
+    "mocha": "^2.2.4"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "",
+  "license": "ISC",
+  "config": {
+    "blanket": {
+      "pattern": "lib/",
+      "data-cover-never": [ "node_modules", "tests" ]
+    }
+  }
+}

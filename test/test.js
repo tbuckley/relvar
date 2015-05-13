@@ -570,8 +570,8 @@ describe("difference", function() {
 });
 
 
-describe.only("join", function() {
-	var baseA, baseB, r, valsA, valsB;
+describe("join", function() {
+	var baseA, baseB, r, valsA, valsB, joinedVals;
 	beforeEach("create test objects", function() {
 		baseA = new relvar.Relvar({
 			foo: Number,
@@ -580,32 +580,39 @@ describe.only("join", function() {
 		}, ["foo"]);
 		baseB = new relvar.Relvar({
 			foo: Number,
-			bar: String,
-			baz: Boolean,
-		}, ["foo"]);
+			qux: String,
+		}, ["foo", "qux"]);
 		valsA = [
 			{foo: 42, bar: "Hello, world!", baz: true},
 			{foo: 25, bar: "A good age", baz: false},
+			{foo: 3, bar: "Twas brillig...", baz: true},
 		];
 		valsB = [
-			{foo: 42, bar: "A", baz: true},
-			{foo: 2, bar: "B", baz: false},
-			{foo: 3, bar: "C", baz: true},
+			{foo: 42, qux: "Row 1"},
+			{foo: 42, qux: "Row 2"},
+			{foo: 25, qux: "Row 3"},
+			{foo: 4, qux: "Row 3"},
+		];
+		joinedVals = [
+			{foo: 42, bar: "Hello, world!", baz: true, qux: "Row 1"},
+			{foo: 42, bar: "Hello, world!", baz: true, qux: "Row 2"},
+			{foo: 25, bar: "A good age", baz: false, qux: "Row 3"},
 		];
 	});
 	it("should return a Relvar with the same spec", function() {
-		r = relvar.difference(baseA, baseB);
+		r = relvar.join(baseA, baseB, ["foo", "qux"]);
 		r.should.be.an.instanceof(relvar.Relvar, "Return is not a Relvar");
 		r.spec.should.have.property("foo", Number);
 		r.spec.should.have.property("bar", String);
 		r.spec.should.have.property("baz", Boolean);
+		r.spec.should.have.property("qux", String);
 	});
-	it("should start with the difference of its bases", function(done) {
+	it("should start with the joining of its bases", function(done) {
 		baseA.insert(valsA, function() {
 			baseB.insert(valsB, function() {
-				r = relvar.difference(baseA, baseB);
-				r.array().should.have.length(1);
-				r.array().should.containDeep([valsA[1]]);
+				r = relvar.join(baseA, baseB, ["foo", "qux"]);
+				r.array().should.have.length(joinedVals.length);
+				r.array().should.containDeep(joinedVals);
 				done();
 			});
 		});
