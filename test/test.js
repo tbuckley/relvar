@@ -568,3 +568,70 @@ describe("difference", function() {
 		});
 	});
 });
+
+
+describe.only("join", function() {
+	var baseA, baseB, r, valsA, valsB;
+	beforeEach("create test objects", function() {
+		baseA = new relvar.Relvar({
+			foo: Number,
+			bar: String,
+			baz: Boolean,
+		}, ["foo"]);
+		baseB = new relvar.Relvar({
+			foo: Number,
+			bar: String,
+			baz: Boolean,
+		}, ["foo"]);
+		valsA = [
+			{foo: 42, bar: "Hello, world!", baz: true},
+			{foo: 25, bar: "A good age", baz: false},
+		];
+		valsB = [
+			{foo: 42, bar: "A", baz: true},
+			{foo: 2, bar: "B", baz: false},
+			{foo: 3, bar: "C", baz: true},
+		];
+	});
+	it("should return a Relvar with the same spec", function() {
+		r = relvar.difference(baseA, baseB);
+		r.should.be.an.instanceof(relvar.Relvar, "Return is not a Relvar");
+		r.spec.should.have.property("foo", Number);
+		r.spec.should.have.property("bar", String);
+		r.spec.should.have.property("baz", Boolean);
+	});
+	it("should start with the difference of its bases", function(done) {
+		baseA.insert(valsA, function() {
+			baseB.insert(valsB, function() {
+				r = relvar.difference(baseA, baseB);
+				r.array().should.have.length(1);
+				r.array().should.containDeep([valsA[1]]);
+				done();
+			});
+		});
+	});
+	it("should add a row when its first base adds a unique row", function(done) {
+		this.timeout(100);
+		baseB.insert(valsB, function() {
+			r = relvar.difference(baseA, baseB);
+			r.on("insert", function(rows) {
+				rows.should.have.length(1);
+				rows.should.containDeep([valsA[1]]);
+				done();
+			});
+			baseA.insert(valsA);
+		});
+	});
+	it("should remove a row when its second base adds an existing row", function(done) {
+		this.timeout(100);
+		baseA.insert(valsA, function() {
+			r = relvar.difference(baseA, baseB);
+			r.on("remove", function(rows) {
+				rows.should.have.length(1);
+				rows.should.containDeep([valsA[0]]);
+				done();
+			});
+			baseB.insert(valsB);
+		});
+	});
+});
