@@ -642,3 +642,21 @@ describe("join", function() {
 		});
 	});
 });
+
+describe.only("complex structures", function() {
+	it("should update tables atomically", function(done) {
+		var a, b, c, spec, uniqueKey;
+		spec = {foo: Number};
+		uniqueKey = ["foo"];
+		a = new relvar.Relvar(spec, uniqueKey);
+		b = new relvar.Relvar(spec, uniqueKey);
+		c = relvar.union(relvar.difference(a, b), b);
+		a.insert([{foo: 1}, {foo: 2}], function() {
+			b.insert([{foo: 2}]);
+		});
+		setTimeout(function() {
+			c.array().should.have.length(2);
+			done();
+		}, 100);
+	});
+});
